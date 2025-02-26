@@ -48,11 +48,6 @@
 #' 
 analyze_environments <- function(data, response_var, name.env = "env", name.gen = "gen") {
   
-  # Load necessary packages
-  
-  if (!requireNamespace("asreml", quietly = TRUE)) install.packages("asreml", repos="https://asreml.kb.vsni.co.uk")
-  if (!requireNamespace("kableExtra", quietly = TRUE)) install.packages("kableExtra")
-  
   library(asreml)
   library(kableExtra)
   
