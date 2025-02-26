@@ -74,6 +74,7 @@ analyze_environments <- function(data, response_var, name.env = "env", name.gen 
     edat <- subset(data, data[[name.env]] == environment) |> droplevels()
     
 # Fit the full model
+    
     model_full <- asreml(
       fixed = as.formula(paste(response_var, "~ block")),
       random = as.formula(paste("~", name.gen)),
