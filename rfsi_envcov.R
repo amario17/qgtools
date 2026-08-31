@@ -21,6 +21,9 @@
 #' Esta função apenas organiza o fluxo de trabalho (tuning + predição +
 #' montagem da matriz final) para o contexto de covariáveis ambientais em
 #' melhoramento genético de plantas.
+#' 
+#' A ideia de selecionar por variáveis os respectivos parametros foi do Bravim Canal
+#' Eu apenas idealizei e criei a função para fazer altomaticamente.
 #'
 #' -----------------------------------------------------------------------------
 #' O QUE ESTA FUNÇÃO FAZ
@@ -171,7 +174,10 @@
 #' res <- rfsi_envcov(train = w, target = Z, plot = TRUE)
 #' write.csv(res$data, "W_matrix_untested_M1.csv", row.names = FALSE)
 #' }
-#'
+#'  
+#' 
+#' 
+#' 
 #' @export
 rfsi_envcov <- function(train,
                         target,
