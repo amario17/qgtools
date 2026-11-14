@@ -1,57 +1,63 @@
-#' Pos-processamento de um modelo misto fatorial (Factor Analytic - FA)
+#' Post-processing of a factor-analytic (FA) mixed model
 #'
-#' A partir de um modelo misto ajustado no ASReml com termo aleatorio
-#' \code{gen:fa(env, k)}, extrai e organiza os principais resultados do
-#' modelo fatorial (FA): as cargas fatoriais (\emph{loadings}) e os
-#' escores de genotipo (\emph{scores}) rotacionados para a forma canonica
-#' via decomposicao em valores singulares (SVD), a matriz de covariancia
-#' genetica entre ambientes (\code{Gvcov}) e a respectiva matriz de
-#' correlacao genetica (\code{Gcor}) implicadas pela estrutura FA(k), alem
-#' de medidas de qualidade de ajuste do modelo: variancia explicada total
-#' e por fator/ambiente, \emph{Average Semivariance Ratio} (ASVR), AIC,
-#' BIC e log-verossimilhanca.
+#' From a mixed model fitted in ASReml with a factor-analytic random term,
+#' \code{gen:fa(env, k)} or \code{fa(env, k):vm(gen, G)} (with a genomic
+#' relationship matrix), extracts and organises the main FA results: the
+#' environment loadings and genotype scores rotated to canonical form via
+#' singular value decomposition (SVD), the genetic covariance matrix
+#' between environments (\code{Gvcov}) and the corresponding genetic
+#' correlation matrix (\code{Gcor}) implied by the FA(k) structure, plus
+#' goodness-of-fit diagnostics: total and factor/environment-wise
+#' explained variance, the Average Semivariance Ratio (ASVR), AIC, BIC and
+#' log-likelihood.
 #'
-#' Tambem sao calculados os BLUPs de genotipo por ambiente em duas
-#' versoes: o valor \strong{marginal} (\eqn{\Lambda f}), correspondente
-#' apenas a parte comum da estrutura fatorial, sem o intercepto nem o
-#' efeito fixo de ambiente - util como insumo para etapas de predicao em
-#' ambientes nao testados (ex: GIS-FA), onde a media geral e demais
-#' efeitos sao adicionados a parte; e o valor \strong{condicional}
-#' (intercepto + efeito fixo de ambiente + desvio aleatorio especifico do
-#' genotipo naquele ambiente), que representa a predicao completa do
-#' genotipo dentro dos ambientes efetivamente testados. 
+#' Genotype-by-environment BLUPs are also returned in two forms: the
+#' \strong{marginal} value (\eqn{\Lambda f}), corresponding only to the
+#' common part of the factor-analytic structure, without the intercept or
+#' the environment fixed effect - useful as an input for prediction in
+#' untested environments (e.g. GIS-FA), where the overall mean and other
+#' effects are added separately; and the \strong{conditional} value
+#' (intercept + environment fixed effect + genotype-by-environment random
+#' effect, including the specific deviation), which is the full genotype
+#' prediction within the environments actually tested.
 #'
-#' @param model Objeto de modelo ajustado no ASReml (\code{asreml}), com
-#'   um termo aleatorio fatorial \code{gen:fa(env, k)} para algum numero
-#'   de fatores \code{k}.
-#' @param name.env Nome (string) da coluna que identifica o ambiente no
-#'   modelo (ex: "env").
-#' @param name.gen Nome (string) da coluna que identifica o genotipo no
-#'   modelo (ex: "gen").
+#' @param model An ASReml model object (\code{asreml}), with a
+#'   factor-analytic random term for some number of factors \code{k}:
+#'   \code{gen:fa(env, k)}, \code{fa(env, k):vm(gen, G)}, or the reduced-rank
+#'   form \code{rr(env, k):gen + diag(env):gen} (with or without \code{vm()}).
+#'   With \code{vm(gen, G)}, set the genotype factor levels in the same
+#'   order as the rows of \code{G} (\code{factor(gen, levels = rownames(G))});
+#'   otherwise ASReml may label the \code{diag(env):gen} effects wrongly and
+#'   the conditional predictions will not match the fitted values.
+#' @param name.env Name (string) of the column identifying the
+#'   environment in the model (e.g. "env").
+#' @param name.gen Name (string) of the column identifying the genotype
+#'   in the model (e.g. "gen").
 #'
-#' @return Uma lista com:
+#' @return A list with:
 #' \describe{
-#'   \item{rot.loads}{Matriz de cargas fatoriais rotacionadas (ambiente x
-#'     fator), na forma canonica obtida via SVD.}
-#'   \item{rot.scores}{Matriz de escores de genotipo rotacionados
-#'     (genotipo x fator).}
-#'   \item{Gvcov}{Matriz de covariancia genetica entre ambientes
-#'     implicada pelo modelo FA(k) (cargas rotacionadas mais as
-#'     variancias especificas de cada ambiente).}
-#'   \item{Gcor}{Matriz de correlacao genetica entre ambientes,
-#'     correspondente a \code{Gvcov} padronizada.}
-#'   \item{diagnostics}{Vetor nomeado com \code{expvar} (percentual da
-#'     variancia genetica total explicada pelos fatores comuns),
-#'     \code{ASVR} (Average Semivariance Ratio, percentual), \code{aic},
-#'     \code{bic} e \code{logl} (log-verossimilhanca) do modelo.}
-#'   \item{expvar_j}{Matriz (fator x ambiente) com o percentual da
-#'     variancia explicado por cada fator dentro de cada ambiente.}
-#'   \item{marginal}{Data frame (env, gen, marginal) com a parte comum
-#'     (\eqn{\Lambda f}) da predicao genotipica, sem intercepto nem
-#'     efeito de ambiente, por ambiente e genotipo.}
-#'   \item{blups}{Data frame (env, gen, conditional, marginal) unindo a
-#'     predicao condicional (completa, dentro dos ambientes testados) e
-#'     a marginal (\eqn{\Lambda f}), por ambiente e genotipo.}
+#'   \item{rot.loads}{Matrix of rotated environment loadings (environment
+#'     x factor), in canonical form obtained via SVD.}
+#'   \item{rot.scores}{Matrix of rotated genotype scores (genotype x
+#'     factor).}
+#'   \item{Gvcov}{Genetic covariance matrix between environments implied
+#'     by the FA(k) model (rotated loadings plus each environment's
+#'     specific variance).}
+#'   \item{Gcor}{Genetic correlation matrix between environments,
+#'     i.e. standardised \code{Gvcov}.}
+#'   \item{diagnostics}{Named vector with \code{expvar} (percentage of
+#'     total genetic variance explained by the common factors),
+#'     \code{ASVR} (Average Semivariance Ratio, percentage), \code{aic},
+#'     \code{bic} and \code{logl} (log-likelihood) of the model.}
+#'   \item{expvar_j}{Matrix (factor x environment) with the percentage of
+#'     variance explained by each factor within each environment.}
+#'   \item{marginal}{Data frame (env, gen, marginal) with the common part
+#'     (\eqn{\Lambda f}) of the genotypic prediction, without intercept
+#'     or environment effect, by environment and genotype.}
+#'   \item{blups}{Data frame (env, gen, conditional, marginal) joining
+#'     the conditional prediction (full, within the tested environments)
+#'     and the marginal one (\eqn{\Lambda f}), by environment and
+#'     genotype.}
 #' }
 #'
 #' @references
@@ -61,13 +67,13 @@
 #' Smith, A.B., Cullis, B.R., Thompson, R. (2001). Analyzing variety by
 #' environment data using multiplicative mixed models and adjustments for
 #' spatial field trend. \emph{Biometrics}, 57(4), 1138-1147.
-#' 
-#' 
+#'
+#'
 #' #############################################################################
-#' Esta funcao foi adaptada e modificada a partir da funcao \code{fa.outs}
-#' do Prof. Saulo Chaves da ESALQ/USP.
+#' This function was adapted and modified from the \code{fa.outs} function
+#' by Prof. Saulo Chaves, ESALQ/USP.
 #' #############################################################################
-#' 
+#'
 #'
 #' @author João Marcos Amario, PhD (\email{joao.m.sousa@ufv.br})
 #'
@@ -101,8 +107,12 @@ fa_model = function(model, name.env, name.gen){
   
   sum = summary(model)
   load = sum$varcomp[grep('fa\\d+', rownames(sum$varcomp)), , drop = FALSE]
-  var = sum$varcomp[grep('var', rownames(sum$varcomp)), 1]
-  
+  var = sum$varcomp[grep('!var$', rownames(sum$varcomp)), 1]
+  # rr(env, k):vm(gen, G) + diag(env):gen model -> the specific variances
+  # are in the diag(env):gen term (in the rr term they are fixed at zero)
+  esp = sum$varcomp[grep(paste0("^", name.env, ":", name.gen, "!", name.env, "_"),
+                         rownames(sum$varcomp)), 1]
+  if (length(esp) == num.env) var = var + esp
   load$fa = regmatches(rownames(load), regexpr("fa\\d+", rownames(load)))
   mat.loadings = do.call(cbind, lapply(split(load[, c('fa','component')], f = load$fa), 
                                        function(x) x[, 'component']))
@@ -125,7 +135,8 @@ fa_model = function(model, name.env, name.gen){
   scores$fa = regmatches(rownames(scores), regexpr("Comp\\d+", rownames(scores)))
   
   scor.vec = do.call(c, lapply(split(scores, f = scores$fa), function(x) x[, 'solution']))
-  scor.vec.star = kronecker(sqrt(D) %*% t(svd.lambda$v), diag(num.gen)) %*% scor.vec
+  # same as kronecker(sqrt(D) V', I) %*% scores, without building the huge matrix
+  scor.vec.star = as.vector(matrix(scor.vec, nrow = num.gen) %*% svd.lambda$v %*% sqrt(D))
   
   scor.mat.star = matrix(
     scor.vec.star,
@@ -188,7 +199,7 @@ fa_model = function(model, name.env, name.gen){
   marginal = data.frame(
     env = rep(env.lev, each = num.gen),
     gen = rep(gen.lev, times = num.env),
-    marginal = as.vector(kronecker(mat.loadings.star, diag(num.gen)) %*% scor.vec.star)
+    marginal = as.vector(matrix(scor.vec.star, nrow = num.gen) %*% t(mat.loadings.star))   # = kronecker(loadings, I) %*% scores
   )
   
   cf = data.frame(summary(model, coef = TRUE)$coef.fixed)
@@ -203,17 +214,32 @@ fa_model = function(model, name.env, name.gen){
   if(length(intercept) == 0) intercept = 0
   
   env_fixed = data.frame(env = env.lev, env_effect = 0)
-  tmp_env = cf[grep("^env_", cf$term), , drop = FALSE]
-  
+  # environment fixed effect only (not env:covariate terms)
+  tmp_env = cf[grep(paste0("^", name.env, "_[^:]+$"), cf$term), , drop = FALSE]
   if(nrow(tmp_env) > 0){
-    tmp_env$env = sub("^env_", "", tmp_env$term)
+    tmp_env$env = sub(paste0("^", name.env, "_"), "", tmp_env$term)
     env_fixed$env_effect[match(tmp_env$env, env_fixed$env)] = tmp_env$solution
   }
-  
-  rand_ge = cr[grep("^gen_[^:]+:fa\\(env, [0-9]+\\)_E[0-9]+$", cr$term), , drop = FALSE]
-  rand_ge$gen = sub("^gen_([^:]+):fa\\(env, [0-9]+\\)_E[0-9]+$", "\\1", rand_ge$term)
-  rand_ge$env = sub("^gen_[^:]+:fa\\(env, [0-9]+\\)_(E[0-9]+)$", "\\1", rand_ge$term)
-  
+  # genotype x environment random effects, whatever the term:
+  #   gen:fa(env, k), fa(env, k):vm(gen, G), rr(env, k):gen or rr(env, k):vm(gen, G)
+  #   (common part) and diag(env):gen (specific part, summed to the common one)
+  pe = paste0("(?:(?:fa|rr)\\(", name.env, ", \\d+\\)|", name.env, ")_")
+  pg = paste0("(?:vm\\(", name.gen, ", [^)]+\\)|", name.gen, ")_")
+  env_1 = paste0("^", pe, "(.+?):", pg, "(.+)$")    # environment first
+  gen_1 = paste0("^", pg, "(.+?):", pe, "(.+)$")    # genotype first
+  a = grepl(env_1, cr$term, perl = TRUE)
+  b = grepl(gen_1, cr$term, perl = TRUE) & !a
+  rand_ge = rbind(
+    data.frame(env = sub(env_1, "\\1", cr$term[a], perl = TRUE),
+               gen = sub(env_1, "\\2", cr$term[a], perl = TRUE),
+               solution = cr$solution[a]),
+    data.frame(env = sub(gen_1, "\\2", cr$term[b], perl = TRUE),
+               gen = sub(gen_1, "\\1", cr$term[b], perl = TRUE),
+               solution = cr$solution[b])
+  )
+  rand_ge = rand_ge[rand_ge$env %in% env.lev & rand_ge$gen %in% gen.lev, ]   # drops the scores (Comp)
+  if(nrow(rand_ge) > 0) rand_ge = aggregate(solution ~ gen + env, data = rand_ge, FUN = base::sum)   # "sum" is the model summary inside this function
+  else rand_ge = data.frame(gen = character(0), env = character(0), solution = numeric(0))
   conditional_df = expand.grid(
     env = env.lev,
     gen = gen.lev,
