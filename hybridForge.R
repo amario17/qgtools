@@ -1,22 +1,39 @@
 #' hybridForge: forge hybrid (F1) genotypes from parental line genotypes
 #'
 #' Reconstructs the SNP-level genotype of each hybrid (F1) from the genotypes
-#' of its two parental inbred lines, using a strict homozygous-parent rule:
-#' a hybrid genotype is only called when BOTH parents have a confirmed
-#' homozygous call at that marker. Any locus where a parent is heterozygous,
-#' missing, or otherwise ambiguous is returned as \code{NA} rather than
-#' approximated, so the output never contains fractional dosages.
+#' of its two parental inbred lines by Mendelian segregation: an inbred
+#' parent always transmits the same allele, so AA x AA -> AA, aa x aa -> aa
+#' and AA x aa -> Aa. Two methods are available for loci where a parent is
+#' heterozygous or missing:
+#' \itemize{
+#'   \item \code{"strict"} (default): a hybrid genotype is only called when
+#'     BOTH parents have a confirmed homozygous call at that marker. Any
+#'     other locus is returned as \code{NA}, so the output never contains
+#'     fractional dosages.
+#'   \item \code{"mean"}: heterozygous parental calls are set to missing,
+#'     missing parental calls are imputed by the marker mean across all
+#'     lines in \code{geno} (twice the ALT allele frequency), and the hybrid
+#'     dosage is the mean of the two parental dosages, \eqn{(P1 + P2) / 2}.
+#'     At confirmed homozygous loci this is identical to \code{"strict"}; at
+#'     imputed loci it is the expected dosage (fractional). The output has
+#'     no \code{NA} and can go straight into a kernel or relationship matrix.
+#' }
 #'
 #' @details
 #' For each hybrid \eqn{i} and marker \eqn{j}, with parental dosages
 #' \eqn{P1_{ij}} and \eqn{P2_{ij}} coded as 0 (homozygous reference),
-#' 1 (heterozygous) or 2 (homozygous alternate):
+#' 1 (heterozygous) or 2 (homozygous alternate), \code{method = "strict"}:
 #' \itemize{
 #'   \item \eqn{P1 = 2} and \eqn{P2 = 2} -> hybrid = 2
 #'   \item \eqn{P1 = 0} and \eqn{P2 = 0} -> hybrid = 0
 #'   \item \eqn{(P1 = 2, P2 = 0)} or \eqn{(P1 = 0, P2 = 2)} -> hybrid = 1
 #'   \item any other combination (heterozygous parent, missing data, etc.) -> \code{NA}
 #' }
+#' Marker quality control (call rate, heterozygosity, monomorphic markers,
+#' minor allele frequency) is not done here; filter \code{geno} before and
+#' the hybrid matrix after, as needed. With \code{method = "mean"}, the
+#' imputation uses all lines in \code{geno}, so pass only the lines that
+#' should inform the allele frequencies (e.g. the parents of the hybrids).
 #' This mirrors the classic F1-from-inbred-parents construction used in
 #' plant breeding genomic prediction pipelines (e.g. Dias, K.O.G., 2018,
 #' unpublished script "Create Hybrids Genotypes"), rewritten here as a
@@ -38,12 +55,16 @@
 #' @param hybrid_col Character. Name of the column in \code{pedigree}
 #'   holding the hybrid's own identifier; this becomes the row name of the
 #'   returned matrix. Default \code{"ID"}.
+#' @param method Character. \code{"strict"} (default) or \code{"mean"};
+#'   see Description.
 #' @param verbose Logical. If \code{TRUE} (default), prints a short summary
 #'   (how many hybrids were requested, how many had both parents genotyped,
 #'   how many were dropped and why).
 #'
 #' @return A numeric matrix of hybrid genotypes, dosage-coded 0/1/2 with
-#'   \code{NA} for undetermined markers. Rows are hybrids (named after
+#'   \code{NA} for undetermined markers (\code{"strict"}), or 0-2 with
+#'   fractional values at imputed markers and no \code{NA}
+#'   (\code{"mean"}). Rows are hybrids (named after
 #'   \code{hybrid_col}), columns are the same markers as \code{geno}
 #'   (same order, same column names).
 #'
@@ -62,6 +83,9 @@
 #'
 #' dim(hybrid_geno)
 #' hybrid_geno[1:5, 1:5]
+#'
+#' # parents imputed by the marker mean, hybrid = (P1 + P2) / 2, no NA
+#' hybrid_mean <- hybridForge(geno, pedigree, method = "mean")
 #' }
 #'
 #' @author Adapted for general use from an original hybrid-genotype
@@ -72,7 +96,10 @@ hybridForge <- function(geno,
                          parent1_col = "Pai",
                          parent2_col = "Mae",
                          hybrid_col  = "ID",
+                         method      = c("strict", "mean"),
                          verbose     = TRUE) {
+
+  method <- match.arg(method)
 
   # ---- input validation --------------------------------------------------
   if (!is.matrix(geno)) stop("'geno' must be a matrix (individuals x markers).")
@@ -113,17 +140,32 @@ hybridForge <- function(geno,
   }
 
   # ---- vectorized construction of hybrid genotypes -----------------------
-  # rule: hybrid genotype is only called when BOTH parents are confirmed
-  # homozygous (0 or 2); anything else (het parent, missing data) -> NA
-  P1 <- geno[parent1, , drop = FALSE]
-  P2 <- geno[parent2, , drop = FALSE]
+  if (method == "strict") {
+    # rule: hybrid genotype is only called when BOTH parents are confirmed
+    # homozygous (0 or 2); anything else (het parent, missing data) -> NA
+    P1 <- geno[parent1, , drop = FALSE]
+    P2 <- geno[parent2, , drop = FALSE]
 
-  hybrid_geno <- matrix(NA_real_, nrow = nrow(P1), ncol = ncol(P1),
-                         dimnames = list(hybrid, colnames(geno)))
+    hybrid_geno <- matrix(NA_real_, nrow = nrow(P1), ncol = ncol(P1),
+                           dimnames = list(hybrid, colnames(geno)))
 
-  hybrid_geno[P1 == 2 & P2 == 2] <- 2
-  hybrid_geno[P1 == 0 & P2 == 0] <- 0
-  hybrid_geno[(P1 == 2 & P2 == 0) | (P1 == 0 & P2 == 2)] <- 1
+    hybrid_geno[P1 == 2 & P2 == 2] <- 2
+    hybrid_geno[P1 == 0 & P2 == 0] <- 0
+    hybrid_geno[(P1 == 2 & P2 == 0) | (P1 == 0 & P2 == 2)] <- 1
+  } else {
+    # heterozygous parental calls -> NA; NA -> marker mean over all lines in
+    # geno; hybrid = mean of the two parental dosages (expected dosage)
+    G <- geno
+    storage.mode(G) <- "double"
+    G[!is.na(G) & G == 1] <- NA
+    media <- colMeans(G, na.rm = TRUE)
+    if (anyNA(media)) stop(sum(is.na(media)), " marker(s) have no homozygous call in 'geno'; remove them first.")
+    falta <- which(is.na(G), arr.ind = TRUE)
+    G[falta] <- media[falta[, 2]]
+    hybrid_geno <- (G[parent1, , drop = FALSE] + G[parent2, , drop = FALSE]) / 2
+    dimnames(hybrid_geno) <- list(hybrid, colnames(geno))
+    n_imputado <- nrow(falta)
+  }
 
   if (verbose) {
     pct_na <- round(100 * mean(is.na(hybrid_geno)), 1)
@@ -133,6 +175,8 @@ hybridForge <- function(geno,
     cat("  Dropped (parent not in 'geno'):    ", n_pai_nao_genotipado, "\n")
     cat("  Hybrids reconstructed:             ", nrow(hybrid_geno), "\n")
     cat("  Markers:                           ", ncol(hybrid_geno), "\n")
+    cat("  Method:                            ", method, "\n")
+    if (method == "mean") cat("  Parental calls imputed (het or NA):", n_imputado, "\n")
     cat("  Missing genotype calls (NA):       ", pct_na, "%\n")
   }
 
